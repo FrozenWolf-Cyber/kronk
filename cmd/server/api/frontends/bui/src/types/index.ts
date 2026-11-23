@@ -1554,6 +1554,7 @@ export interface TrainingRun {
   source_document?: string;
   settings?: TrainingRunSettings;
   control_revision: number;
+  control_acknowledged_revision: number;
   control_action?: string;
   control_stage?: string;
   observed_at?: string;
