@@ -1955,8 +1955,8 @@ func mtmdContextParams(cfg Config, device llama.GGMLBackendDevice) mtmd.ContextP
 	if cfg.PtrImageTokenBudget != nil {
 		params.ImageMaxTokens = int32(cfg.ImageTokenBudget())
 	}
-	if cfg.NThreadsBatch() > 0 {
-		params.Threads = int32(cfg.NThreadsBatch())
+	if cfg.ProjThreads() > 0 {
+		params.Threads = int32(cfg.ProjThreads())
 	}
 
 	if cfg.PtrProjOnCPU != nil {

@@ -334,6 +334,9 @@ type AdapterConfig struct {
 // projector device automatically. It cannot be combined with ProjOnCPU=true.
 // The LLM device selection is unaffected.
 //
+// ProjThreads is the number of threads the multimodal projector (mmproj) uses
+// to encode images and audio. When unset or set to 0, it uses NThreadsBatch.
+//
 // QueueDepth sets the number of admitted request layers for generation and
 // decision models.
 // The admission capacity is NSeqMax * QueueDepth. A depth of 1 admits only the
@@ -445,6 +448,7 @@ type Config struct {
 	MTPDrafterFile             string
 	PtrProjOnCPU               *bool
 	ProjDevice                 string
+	PtrProjThreads             *int
 	PtrQueueDepth              *int
 	ResponseModelID            string
 	PtrRopeFreqBase            *float32
@@ -520,6 +524,14 @@ func (cfg Config) EffectiveNBatch() int { return cfg.nBatch }
 
 // EffectiveNUBatch returns the derived llama.cpp physical batch capacity.
 func (cfg Config) EffectiveNUBatch() int { return cfg.nUBatch }
+
+// ProjThreads returns the projector's thread count, NThreadsBatch unless set.
+func (cfg Config) ProjThreads() int {
+	if n := intOr(cfg.PtrProjThreads, 0); n > 0 {
+		return n
+	}
+	return cfg.NThreadsBatch()
+}
 
 func (cfg Config) NSeqMax() int            { return intOr(cfg.PtrNSeqMax, 0) }
 func (cfg Config) NThreads() int           { return intOr(cfg.PtrNThreads, 0) }
@@ -1428,6 +1440,7 @@ func WithProjFile(v string) Option             { return func(c *Config) { c.Proj
 func WithMTPDrafterFile(v string) Option       { return func(c *Config) { c.MTPDrafterFile = v } }
 func WithProjOnCPU(v bool) Option              { return func(c *Config) { c.PtrProjOnCPU = new(v) } }
 func WithProjDevice(v string) Option           { return func(c *Config) { c.ProjDevice = v } }
+func WithProjThreads(v int) Option             { return func(c *Config) { c.PtrProjThreads = new(v) } }
 func WithRopeFreqBase(v float32) Option        { return func(c *Config) { c.PtrRopeFreqBase = new(v) } }
 func WithRopeFreqScale(v float32) Option       { return func(c *Config) { c.PtrRopeFreqScale = new(v) } }
 func WithRopeScaling(v RopeScalingType) Option { return func(c *Config) { c.RopeScaling = v } }
