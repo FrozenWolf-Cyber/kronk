@@ -1,10 +1,14 @@
 package model
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"maps"
+	"os"
+	"path/filepath"
 	"slices"
 	"time"
 
@@ -265,5 +269,77 @@ func (m *Model) imcPublishSystemCache(ctx context.Context, cache *imcSystemCache
 
 	m.log(ctx, "imc", "status", "system-cache-published", "system_cache_entry", entryID,
 		"tokens", tokens, "snapshot_bytes", fmtBytes(uint64(snapshotBytes)))
+	m.imcSaveSystemCache(ctx, cache)
 	return true
+}
+
+// imcSystemCacheFile is where SystemCacheDir keeps one System cache entry.
+func (m *Model) imcSystemCacheFile(cache *imcSystemCache) string {
+	return filepath.Join(m.cfg.SystemCacheDir, fmt.Sprintf("%s.system-%d.kv", m.modelInfo.ID, cache.id))
+}
+
+// imcSaveSystemCache writes a published entry as its token count, its tokens
+// and its KV state. Entries with draft state stay in memory only.
+func (m *Model) imcSaveSystemCache(ctx context.Context, cache *imcSystemCache) {
+	if m.cfg.SystemCacheDir == "" || cache.draftKVState != nil || len(cache.pendingH) > 0 {
+		return
+	}
+	state, err := cache.kvState.Bytes(ctx)
+	if err != nil {
+		return
+	}
+	var buf bytes.Buffer
+	binary.Write(&buf, binary.LittleEndian, uint32(len(cache.cachedTokens)))
+	binary.Write(&buf, binary.LittleEndian, cache.cachedTokens)
+	buf.Write(state)
+	file := m.imcSystemCacheFile(cache)
+	err = errors.Join(os.MkdirAll(m.cfg.SystemCacheDir, 0o755), os.WriteFile(file+".tmp", buf.Bytes(), 0o644))
+	if err == nil {
+		err = os.Rename(file+".tmp", file)
+	}
+	if err != nil {
+		m.log(ctx, "imc", "status", "system-cache-save-failed", "err", err)
+	}
+}
+
+// imcLoadSystemCache fills an empty entry from SystemCacheDir. A file this
+// context can't restore, such as one from another context size, is removed.
+func (m *Model) imcLoadSystemCache(ctx context.Context, cache *imcSystemCache) {
+	if m.cfg.SystemCacheDir == "" {
+		return
+	}
+	file := m.imcSystemCacheFile(cache)
+	data, err := os.ReadFile(file)
+	if err != nil || len(data) < 4 {
+		return
+	}
+	n := int(binary.LittleEndian.Uint32(data))
+	if len(data) <= 4+4*n {
+		os.Remove(file)
+		return
+	}
+	tokens := make([]llama.Token, n)
+	binary.Read(bytes.NewReader(data[4:]), binary.LittleEndian, tokens)
+	state := data[4+4*n:]
+	ok := llama.StateSeqSetData(m.lctx, state, 0) == uint64(len(state))
+	llama.MemorySeqRm(m.mem, 0, -1, -1)
+	if !ok {
+		m.log(ctx, "imc", "status", "system-cache-file-removed", "file", file)
+		os.Remove(file)
+		return
+	}
+	store := m.imcSystemCacheStore(cache, false)
+	buf, err := store.Prepare(ctx, len(state))
+	if err != nil {
+		return
+	}
+	copy(buf, state)
+	if store.Commit(ctx, len(state)) != nil {
+		return
+	}
+	cache.cachedTokens = tokens
+	cache.allocatedContext = n
+	cache.snapshotBytes = imcSnapshotBytes(store, nil, nil)
+	cache.lastUsed = time.Now()
+	m.log(ctx, "imc", "status", "system-cache-loaded", "system_cache_entry", cache.id, "tokens", n)
 }

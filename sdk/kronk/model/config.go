@@ -222,6 +222,10 @@ type AdapterConfig struct {
 // for agents like Cline or OpenCode where conversations grow monotonically.
 // The cache is rebuilt from scratch when the message prefix changes (new thread).
 //
+// SystemCacheDir keeps IMC's system-prompt caches in this folder, so the next
+// load of the same model starts with them instead of decoding the system
+// prompt again. Empty keeps them in memory only.
+//
 // InsecureLogging enables logging of potentially sensitive data such as message
 // content. This should only be enabled for debugging purposes in non-production
 // environments.
@@ -425,6 +429,7 @@ type Config struct {
 	PtrImageBatchTokenCapacity *int
 	PtrImageTokenBudget        *int
 	PtrIncrementalCache        *bool
+	SystemCacheDir             string
 	PtrInsecureLogging         *bool
 	JinjaFile                  string
 	JinjaScript                string
@@ -1417,6 +1422,7 @@ func WithImageTokenBudget(v int) Option {
 	return func(c *Config) { c.PtrImageTokenBudget = new(v) }
 }
 func WithIncrementalCache(v bool) Option       { return func(c *Config) { c.PtrIncrementalCache = new(v) } }
+func WithSystemCacheDir(v string) Option       { return func(c *Config) { c.SystemCacheDir = v } }
 func WithInsecureLogging(v bool) Option        { return func(c *Config) { c.PtrInsecureLogging = new(v) } }
 func WithJinjaFile(v string) Option            { return func(c *Config) { c.JinjaFile = v } }
 func WithJinjaScript(v string) Option          { return func(c *Config) { c.JinjaScript = v } }

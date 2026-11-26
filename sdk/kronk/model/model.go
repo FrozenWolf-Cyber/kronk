@@ -903,6 +903,7 @@ func initGenerationRuntime(ctx context.Context, m *Model, nSlots int, plan inter
 			}
 			m.imcSessions[i] = &session
 			m.imcSystemCaches[i] = &imcSystemCache{id: i}
+			m.imcLoadSystemCache(ctx, m.imcSystemCaches[i])
 		}
 	}
 
